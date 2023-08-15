@@ -501,9 +501,11 @@ Init
 
 	banksel	SSPCON1		;SSP in I2C slave mode at I2CBASE, with low two
 	movlw	I2CBASE << 1	; (not three) bits of address used as register
-	movwf	SSPADD		; select
-	movlw	B'11111000'
-	movwf	SSPMSK
+	movwf	SSPADD		; select, SMBus input logic levels so we can
+	movlw	B'11111000'	; communicate at 3.3V levels even when powered
+	movwf	SSPMSK		; at 5V
+	movlw	B'01000000'
+	movwf	SSPSTAT
 	movlw	B'00110110'
 	movwf	SSPCON1
 
