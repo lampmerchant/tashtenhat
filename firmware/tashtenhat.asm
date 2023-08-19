@@ -10,17 +10,17 @@
 
 ;;; Connections ;;;
 
-;;;                                                                 ;;;
-;                               .--------.                            ;
-;                       Supply -|01 \/ 14|- Ground                    ;
-;          X10 Out <---    RA5 -|02    13|- RA0    <--> ICSP Data     ;
-;           X10 In --->    RA4 -|03    12|- RA1    <--- ICSP Clock    ;
-;            !MCLR --->    RA3 -|04    11|- RA2    ----               ;
-;    Zero Crossing --->    RC5 -|05    10|- RC0    <--> I2C SCL       ;
-;          UART TX <---    RC4 -|06    09|- RC1    <--> I2C SDA       ;
-;          UART RX --->    RC3 -|07    08|- RC2    ----               ;
-;                               '--------'                            ;
-;;;                                                                 ;;;
+;;;                                                                    ;;;
+;                               .--------.                               ;
+;                       Supply -|01 \/ 14|- Ground                       ;
+;          X10 Out <---    RA5 -|02    13|- RA0    <--> ICSP Data        ;
+;           X10 In --->    RA4 -|03    12|- RA1    <--- ICSP Clock       ;
+;         ICSP Vpp --->    RA3 -|04    11|- RA2    ----                  ;
+;    Zero Crossing --->    RC5 -|05    10|- RC0    <--> I2C SCL          ;
+;          UART TX <---    RC4 -|06    09|- RC1    <--> I2C SDA          ;
+;          UART RX --->    RC3 -|07    08|- RC2    ---> Driver Enable    ;
+;                               '--------'                               ;
+;;;                                                                    ;;;
 
 
 ;;; Assembler Directives ;;;
@@ -107,6 +107,8 @@ XI_PORT	equ	PORTA	;X10 input port
 XI_PIN	equ	RA4	;X10 input pin
 SD_PPSO	equ	RC1PPS	;I2C SDA PPS output value
 SC_PPSO	equ	RC0PPS	;I2C SCL PPS output value
+DE_PORT	equ	PORTC	;Driver Enable port
+DE_PIN	equ	RC2	;Driver Enable pin
 TX_PORT	equ	PORTC	;UART Tx port
 TX_PIN	equ	RC4	;UART Tx pin
 TX_PPSO	equ	RC4PPS	;UART Tx PPS output value
@@ -185,6 +187,8 @@ IntTx
 	xorwf	XQ_POP,W	; disable the interrupt
 	btfsc	STATUS,Z	; "
 	bra	IntTx0		; "
+	movlb	2		;We're transmitting, so make sure the driver
+	bsf	DE_PORT,DE_PIN	; enable pin is high
 	movf	XQ_POP,W	;Load write queue pop point into FSR0 so it can
 	movwf	FSR0L		; be read from
 	bcf	FSR0H,0		; "
@@ -574,12 +578,14 @@ Init
 	clrf	ANSELA
 	clrf	ANSELC
 
-	banksel	LATA		;X10 output pin is high (120 KHz off)
-	bsf	XO_PORT,XO_PIN
+	banksel	LATA		;X10 output pin is high (120 KHz off), driver
+	bsf	XO_PORT,XO_PIN	; enable pin is low (driver off)
+	bcf	DE_PORT,DE_PIN
 
-	banksel	TRISA		;X10 out and Tx output, all others input
-	bcf	XO_PORT,XO_PIN
+	banksel	TRISA		;X10 out, Tx, and driver enable output, all
+	bcf	XO_PORT,XO_PIN	; others input
 	bcf	TX_PORT,TX_PIN
+	bcf	DE_PORT,DE_PIN
 
 	banksel	PIE1		;SSP, Rx, and CLC3 peripheral interrupts on
 	movlw	(1 << SSP1IE) | (1 << RCIE)
@@ -620,7 +626,21 @@ Init
 ;;; Mainline ;;;
 
 Main
-	bra	$
+	bsf	INTCON,GIE	;Reenable interrupts
+	movlb	2		;If the driver enable is already off, don't
+	btfss	DE_PORT,DE_PIN	; bother checking whether we should turn it off
+	bra	Main		; "
+	movlb	3		;If the UART is transmitting, do not turn off
+	btfss	TXSTA,TRMT	; the driver enable
+	bra	Main		; "
+	bcf	INTCON,GIE	;Check if write queue is empty
+	movf	XQ_PUSH,W	; "
+	xorwf	XQ_POP,W	; "
+	btfss	STATUS,Z	;If write queue is not empty, do not turn off
+	bra	Main		; the driver enable
+	movlb	2		;If the UART is not transmitting and the write
+	bcf	DE_PORT,DE_PIN	; queue is empty, turn off the driver enable
+	bra	Main		;Loop
 
 
 ;;; Lookup Tables ;;;
