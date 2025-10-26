@@ -10,17 +10,17 @@
 
 ;;; Connections ;;;
 
-;;;                                                                    ;;;
-;                               .--------.                               ;
-;                       Supply -|01 \/ 14|- Ground                       ;
-;          X10 Out <---    RA5 -|02    13|- RA0    <--> ICSP Data        ;
-;           X10 In --->    RA4 -|03    12|- RA1    <--- ICSP Clock       ;
-;         ICSP Vpp --->    RA3 -|04    11|- RA2    ----                  ;
-;    Zero Crossing --->    RC5 -|05    10|- RC0    <--> I2C SCL          ;
-;          UART TX <---    RC4 -|06    09|- RC1    <--> I2C SDA          ;
-;          UART RX --->    RC3 -|07    08|- RC2    ---> Driver Enable    ;
-;                               '--------'                               ;
-;;;                                                                    ;;;
+;;;                                                            ;;;
+;                           .--------.                           ;
+;                   Supply -|01 \/ 14|- Ground                   ;
+;          X10 Out <-- RA5 -|02    13|- RA0 <-> ICSP Data        ;
+;           X10 In --> RA4 -|03    12|- RA1 <-- ICSP Clock       ;
+;            !MCLR --> RA3 -|04    11|- RA2 ---                  ;
+;    Zero Crossing --> RC5 -|05    10|- RC0 <-> I2C SCL          ;
+;          UART TX <-- RC4 -|06    09|- RC1 <-> I2C SDA          ;
+;          UART RX --> RC3 -|07    08|- RC2 --> Driver Enable    ;
+;                           '--------'                           ;
+;;;                                                            ;;;
 
 
 ;;; Assembler Directives ;;;
@@ -28,23 +28,24 @@
 	list		P=PIC16F1704, F=INHX32, ST=OFF, MM=OFF, R=DEC, X=ON
 	#include	P16F1704.inc
 	errorlevel	-302	;Suppress "register not in bank 0" messages
-	__config	_CONFIG1, _FOSC_INTOSC & _WDTE_OFF & _PWRTE_ON & _MCLRE_OFF & _CP_OFF & _BOREN_OFF & _CLKOUTEN_OFF & _IESO_OFF & _FCMEN_OFF
+	errorlevel	-224	;Suppress TRIS instruction not recommended msgs
+	__config	_CONFIG1, _FOSC_INTOSC & _WDTE_OFF & _PWRTE_ON & _MCLRE_ON & _CP_OFF & _BOREN_OFF & _CLKOUTEN_OFF & _IESO_OFF & _FCMEN_OFF
 			;_FOSC_INTOSC	Internal oscillator, I/O on RA5
 			;_WDTE_OFF	Watchdog timer disabled
 			;_PWRTE_ON	Keep in reset for 64 ms on start
-			;_MCLRE_OFF	RA3/!MCLR is RA3
+			;_MCLRE_ON	RA3/!MCLR is !MCLR
 			;_CP_OFF	Code protection off
 			;_BOREN_OFF	Brownout reset off
 			;_CLKOUTEN_OFF	CLKOUT disabled, I/O on RA4
 			;_IESO_OFF	Internal/External switch not needed
 			;_FCMEN_OFF	Fail-safe clock monitor not needed
-	__config	_CONFIG2, _WRT_OFF & _PPS1WAY_OFF & _ZCDDIS_ON & _PLLEN_ON & _STVREN_ON & _LVP_OFF
+	__config	_CONFIG2, _WRT_OFF & _PPS1WAY_OFF & _ZCDDIS_ON & _PLLEN_ON & _STVREN_ON & _LVP_ON
 			;_WRT_OFF	Write protection off
 			;_PPS1WAY_OFF	PPS can change more than once
 			;_ZCDDIS_ON	Zero crossing detector disabled
 			;_PLLEN_ON	4x PLL on
 			;_STVREN_ON	Stack over/underflow causes reset
-			;_LVP_OFF	High-voltage on Vpp to program
+			;_LVP_ON	Low-voltage programming enabled
 
 
 ;;; Macros ;;;
@@ -578,7 +579,7 @@ Init
 	clrf	ANSELA
 	clrf	ANSELC
 
-	banksel	LATA		;X10 output pin is high (120 KHz off), driver
+	banksel	LATA		;X10 output pin is high (120 kHz off), driver
 	bsf	XO_PORT,XO_PIN	; enable pin is low (driver off)
 	bcf	DE_PORT,DE_PIN
 
@@ -648,7 +649,7 @@ Main
 	org	0xF00
 
 ;Baud rate LUT for UART
-Baud				; Baud Rate  Actual       % Err
+Baud				; Nominal    Actual       % Err
 	dt	0x68,0x2A	;   300 Hz      299.9 Hz  0.00%
 	dt	0x34,0x14	;   600 Hz      600.0 Hz  0.00%
 	dt	0x1A,0x0A	;  1200 Hz     1199.9 Hz  0.00%
